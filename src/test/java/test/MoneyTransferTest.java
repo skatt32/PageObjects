@@ -1,80 +1,62 @@
 package test;
 
-import lombok.val;
-import org.junit.jupiter.api.*;
-import data.DataHelper;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import page.DashboardPage;
 import page.LoginPage;
 
 import static com.codeborne.selenide.Selenide.open;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static data.DataHelper.*;
 
 
 public class MoneyTransferTest {
+    DashboardPage dashboardPage;
+    CardInfo firstCardInfo;
+    CardInfo secondCardInfo;
+    int firstCardBalance;
+    int secondCardBalance;
+
     @BeforeEach
     void setUp() {
-        open("http://localhost:9999");
+        var loginPage = open("http://localhost:9999", LoginPage.class);
+        var authInfo = getAuthInfo();
+        var verificationPage = loginPage.validLogin(authInfo);
+        var verificationCode = getVerificationCode();
+        dashboardPage = verificationPage.validVerify(String.valueOf(verificationCode));
+        firstCardInfo = getFirstCardInfo();
+        secondCardInfo = getSecondCardInfo();
+        firstCardBalance = dashboardPage.getCardBalance(getMaskedNumber(firstCardInfo.getCardNumber()));
+        secondCardBalance = dashboardPage.getCardBalance(getMaskedNumber(secondCardInfo.getCardNumber()));
     }
 
     @Test
-    void shouldTransferFromCardToCardPositiveTest() {
-        val LoginPage = new LoginPage();
-        val authInfo = getAuthInfo();
-        val verificationPage = LoginPage.validLogin(authInfo);
-        val verificationCode = getVerificationCodeFor(authInfo);
-        val dashboardPage = verificationPage.validVerify(verificationCode);
-        val firstCardBalance = dashboardPage.getCardBalance(getFirstCardNumber().getCardNumber());
-        val secondCardBalance = dashboardPage.getCardBalance(getSecondCardNumber().getCardNumber());
-        val transferPage = dashboardPage.depositToFirstCard();
-        int amount = 1_000;
-        transferPage.transferMoney(amount, getSecondCardNumber());
-        val expectedFirstCardBalanceAfter = firstCardBalance + amount;
-        val expectedSecondCardBalanceAfter = secondCardBalance - amount;
-        Assertions.assertEquals(expectedFirstCardBalanceAfter, dashboardPage.getCardBalance(getFirstCardNumber().getCardNumber()));
-        Assertions.assertEquals(expectedSecondCardBalanceAfter, dashboardPage.getCardBalance(getSecondCardNumber().getCardNumber()));
+    void shouldTransferFromFirstToSecond() {
+        var amount = generateValidAmount(firstCardBalance);
+        var expectedBalanceFirstCard = firstCardBalance - amount;
+        var expectedBalanceSecondCard = secondCardBalance + amount;
+        var transferPage = dashboardPage.selectCardToTransfer(secondCardInfo);
+        dashboardPage = transferPage.makeValidTransfer(String.valueOf(amount), firstCardInfo);
+        var actualBalanceFirstCard = dashboardPage.getCardBalance(getMaskedNumber(firstCardInfo.getCardNumber()));
+        var actualBalanceSecondCard = dashboardPage.getCardBalance(getMaskedNumber(secondCardInfo.getCardNumber()));
+        assertAll(() -> assertEquals(expectedBalanceFirstCard, actualBalanceFirstCard),
+                () -> assertEquals(expectedBalanceSecondCard, actualBalanceSecondCard));
 
     }
-
     @Test
-    void shouldZeroSumTransferNegativeTest() {
-        val LoginPage = new LoginPage();
-        val authInfo = DataHelper.getAuthInfo();
-        val verificationPage = LoginPage.validLogin(authInfo);
-        val verificationCode = DataHelper.getVerificationCodeFor(authInfo);
-        val dashboardPage = verificationPage.validVerify(verificationCode);
-        val transferPage = dashboardPage.depositToSecondCard();
-        int amount = 0;
-        transferPage.transferMoney(amount, DataHelper.getFirstCardNumber());
-        transferPage.emptyAmountField();
+    void shouldGetErrorMessageIfAmountMoreBalance() {
 
-    }
-
-    @Test
-    void shouldAmountMoreBalanceIsNegativeTest() {
-        val LoginPage = new LoginPage();
-        val authInfo = DataHelper.getAuthInfo();
-        val verificationPage = LoginPage.validLogin(authInfo);
-        val verificationCode = DataHelper.getVerificationCodeFor(authInfo);
-        val dashboardPage = verificationPage.validVerify(verificationCode);
-        val secondCardBalance = dashboardPage.getCardBalance(getSecondCardNumber().getCardNumber());
-        val transferPage = dashboardPage.depositToFirstCard();
-        int amount = DashboardPage.formatWithoutMinusIssue(secondCardBalance);
-        transferPage.transferMoney(amount, DataHelper.getSecondCardNumber());
-        transferPage.amountMoreThanBalance();
-
-    }
-
-    @Test
-    void shouldTransferFromCardToSameCardNegativeTest() {
-        val LoginPage = new LoginPage();
-        val authInfo = getAuthInfo();
-        val verificationPage = LoginPage.validLogin(authInfo);
-        val verificationCode = getVerificationCodeFor(authInfo);
-        val dashboardPage = verificationPage.validVerify(verificationCode);
-        val transferPage = dashboardPage.depositToFirstCard();
-        int amount = 1_000;
-        transferPage.transferMoney(amount, getFirstCardNumber());
-        transferPage.enterAnotherCard();
-
+        var amount = generateInvalidAmount(secondCardBalance);
+        var TransferPage = dashboardPage.selectCardToTransfer(firstCardInfo);
+        TransferPage.makeTransfer(String.valueOf(amount),secondCardInfo);
+        TransferPage.findErrorMessage("Выполнена попытка перевода суммыб превышающей остаток на карте списания");
+        var actualBalanceFirstCard = dashboardPage.getCardBalance(getMaskedNumber(firstCardInfo.getCardNumber()));
+        var actualBalanceSecondCard = dashboardPage.getCardBalance(getMaskedNumber(secondCardInfo.getCardNumber()));
+        assertAll(() -> assertEquals(firstCardBalance, actualBalanceFirstCard),
+                () -> assertEquals(secondCardBalance, actualBalanceSecondCard));
     }
 }
+
+
