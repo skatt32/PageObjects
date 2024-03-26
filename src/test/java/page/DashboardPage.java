@@ -13,7 +13,7 @@ import static com.codeborne.selenide.Selenide.$$;
 
 public class DashboardPage {
     private final SelenideElement heading = $("[data-test-id=dashboard]");
-    private final ElementsCollection cards = $$(".list__item");
+    private final ElementsCollection cards = $$(".list__item div");
     private final String balanceStart = "баланс: ";
     private final String balanceFinish = " р.";
 
